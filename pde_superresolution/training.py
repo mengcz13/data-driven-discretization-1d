@@ -564,7 +564,9 @@ def _session_config():
       memory_optimization=rewriter_config_pb2.RewriterConfig.NO_MEM_OPT)
   graph_options = config_pb2.GraphOptions(
       rewrite_options=rewriter_config)
-  return config_pb2.ConfigProto(graph_options=graph_options)
+  config = config_pb2.ConfigProto(graph_options=graph_options)
+  config.gpu_options.allow_growth = True
+  return config
 
 
 def training_loop(snapshots: np.ndarray,

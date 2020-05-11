@@ -92,7 +92,7 @@ def main(_, runner=None):
 
   use_weno = (FLAGS.discretization_method == 'weno'
               or (FLAGS.discretization_method == 'exact'
-                  and FLAGS.equation_name == 'burgers'))
+                  and FLAGS.equation_name.startswith('burgers')))
 
   if (not use_weno and FLAGS.exact_filter_interval):
     exact_filter_interval = float(FLAGS.exact_filter_interval)
