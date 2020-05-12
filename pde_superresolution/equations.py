@@ -202,11 +202,17 @@ class RandomForcing(object):
                seed: int = 0,
                amplitude: float = 1,
                k_min: int = 1,
-               k_max: int = 3):
+               k_max: int = 3,
+               abs_a_min: float = 0,
+               abs_a_max: float = 0.5,
+               abs_omega_min: float = 0,
+               abs_omega_max: float = 0.4):
     self.grid = grid
     rs = np.random.RandomState(seed)
-    self.a = 0.5 * amplitude * rs.uniform(-1, 1, size=(nparams, 1))
-    self.omega = rs.uniform(-0.4, 0.4, size=(nparams, 1))
+    # self.a = 0.5 * amplitude * rs.uniform(-1, 1, size=(nparams, 1))
+    # self.omega = rs.uniform(-0.4, 0.4, size=(nparams, 1))
+    self.a = rs.uniform(abs_a_min, abs_a_max, size=(nparams, 1)) * amplitude * rs.choice([-1.0, 1.0], size=(nparams, 1))
+    self.omega = rs.uniform(abs_omega_min, abs_omega_max, size=(nparams, 1)) * rs.choice([-1.0, 1.0], size=(nparams, 1))
     k_values = np.arange(k_min, k_max + 1)
     self.k = rs.choice(np.concatenate([-k_values, k_values]), size=(nparams, 1))
     self.phi = rs.uniform(0, 2 * np.pi, size=(nparams, 1))
@@ -242,19 +248,38 @@ class BurgersEquation(Equation):
                period: float = 2 * np.pi,
                random_seed: int = 0,
                eta: float = 0.04,
+               mu: float = 1.0,
                k_min: int = 1,
                k_max: int = 3,
+               abs_a_min: float = 0,
+               abs_a_max: float = 0.5,
+               abs_omega_min: float = 0,
+               abs_omega_max: float = 0.4,
+               init_value_func_name='zero',
+               with_forcing=True
               ):
     super(BurgersEquation, self).__init__(
         num_points, resample_factor, period, random_seed)
-    self.forcing = RandomForcing(self.grid, seed=random_seed, k_min=k_min,
-                                 k_max=k_max)
+    self.forcing = RandomForcing(self.grid, seed=random_seed, 
+      k_min=k_min, k_max=k_max, 
+      abs_a_min=abs_a_min, abs_a_max=abs_a_max,
+      abs_omega_min=abs_omega_min, abs_omega_max=abs_omega_max)
     self.eta = eta
+    self.mu = mu
     self.k_min = k_min
     self.k_max = k_max
+    self.init_value_func_name = init_value_func_name
+    self.with_forcing = with_forcing
 
   def initial_value(self) -> np.ndarray:
-    return np.zeros_like(self.grid.solution_x)
+    if self.init_value_func_name == 'zero':
+      return np.zeros_like(self.grid.solution_x)
+    elif self.init_value_func_name == 'sin':
+      return np.sin(self.grid.solution_x)
+    elif self.init_value_func_name == 'sin_exp':
+      return np.sin(2 * self.grid.solution_x) * (np.exp(-2 * np.square(self.grid.solution_x - np.pi)) - 0.5)
+    else:
+      raise NotImplementedError()
 
   @property
   def time_step(self) -> float:
@@ -270,11 +295,15 @@ class BurgersEquation(Equation):
       self, y: T, spatial_derivatives: Mapping[str, T]) -> T:
     y_x = spatial_derivatives['u_x']
     y_xx = spatial_derivatives['u_xx']
-    y_t = self.eta * y_xx - y * y_x
+    # y_t = self.eta * y_xx - y * y_x
+    y_t = self.eta * y_xx - self.mu * y * y_x
     return y_t
 
   def finalize_time_derivative(self, t: float, y_t: tf.Tensor) -> tf.Tensor:
-    return y_t + self.forcing(t)
+    if self.with_forcing:
+      return y_t + self.forcing(t)
+    else:
+      return y_t
 
   def params(self):
     return dict(
@@ -284,6 +313,8 @@ class BurgersEquation(Equation):
         eta=self.eta,
         k_min=self.k_min,
         k_max=self.k_max,
+        init_value_func_name=self.init_value_func_name,
+        with_forcing=self.with_forcing
     )
 
   def to_fine(self):
@@ -333,7 +364,8 @@ class ConservativeBurgersEquation(BurgersEquation):
     del y  # unused
     y = spatial_derivatives['u']
     y_x = spatial_derivatives['u_x']
-    flux = 0.5 * y ** 2 - self.eta * y_x
+    # flux = 0.5 * y ** 2 - self.eta * y_x
+    flux = self.mu * 0.5 * y ** 2 - self.eta * y_x
     y_t = -staggered_first_derivative(flux, self.grid.solution_dx)
     return y_t
 
@@ -365,7 +397,7 @@ class GodunovBurgersEquation(BurgersEquation):
     y_x = spatial_derivatives['u_x']
 
     convective_flux = godunov_convective_flux(y_minus, y_plus)
-    flux = convective_flux - self.eta * y_x
+    flux = self.mu * convective_flux - self.eta * y_x
     y_t = -staggered_first_derivative(flux, self.grid.solution_dx)
     return y_t
 

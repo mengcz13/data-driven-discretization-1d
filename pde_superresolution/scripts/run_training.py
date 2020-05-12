@@ -61,7 +61,13 @@ def main(unused_argv):
   logging.info('Loading training data')
   with utils.read_h5py(FLAGS.input_path) as f:
     snapshots = f['v'][...]
-    equation_kwargs = {k: v.item() for k, v in f.attrs.items()}
+    # equation_kwargs = {k: v.item() for k, v in f.attrs.items()}
+    equation_kwargs = {}
+    for k, v in f.attrs.items():
+      if type(v) is str:
+        equation_kwargs[k] = v
+      else:
+        equation_kwargs[k] = v.item()
 
   logging.info('Inputs have shape %r', snapshots.shape)
 
