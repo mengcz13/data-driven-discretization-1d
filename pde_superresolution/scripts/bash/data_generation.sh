@@ -21,6 +21,8 @@ CUDA_VISIBLE_DEVICES=-1 python pde_superresolution/scripts/create_training_data.
 # 100 steps, warmup 10
 CUDA_VISIBLE_DEVICES=-1 python pde_superresolution/scripts/create_exact_data.py --output_path data/piml/burgers_meta-test_test.nc --equation_name burgers --num_samples 10 --equation_kwargs "{\"num_points\": 512, \"eta\": 0.1, \"mu\": 1.0, \"k_min\": 5, \"k_max\": 6, \"abs_a_min\": 0.25, \"abs_a_max\": 0.5, \"abs_omega_min\": 0.2, \"abs_omega_max\": 0.4}" --time_max 100 --time_delta 0.1 --warmup 10
 
+CUDA_VISIBLE_DEVICES=-1 python pde_superresolution/scripts/create_exact_data.py --output_path data/piml/burgers_meta-test_test_so1000000.nc --equation_name burgers --num_samples 10 --equation_kwargs "{\"num_points\": 512, \"eta\": 0.1, \"mu\": 1.0, \"k_min\": 5, \"k_max\": 6, \"abs_a_min\": 0.25, \"abs_a_max\": 0.5, \"abs_omega_min\": 0.2, \"abs_omega_max\": 0.4}" --time_max 100 --time_delta 0.1 --warmup 10
+
 # Different coefs
 # Meta-training data: 0.25 < abs(A) <= 0.5, 0.2 < abs(omega) <= 0.4, l <- [5, 6]
 # 100 steps, warmup 10

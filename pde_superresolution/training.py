@@ -79,6 +79,7 @@ def create_hparams(equation: str, **kwargs: Any) -> tf.contrib.training.HParams:
     frac_training: float fraction of the input dataset to use for training vs.
       validation.
     eval_interval: integer training step frequency at which to run evaluation.
+    init_checkpoint_dir: checkpoint_dir storing initial weights
 
   Noise parameters
     noise_probability: float probability of adding noise to input data for any
@@ -145,6 +146,7 @@ def create_hparams(equation: str, **kwargs: Any) -> tf.contrib.training.HParams:
       learning_stops=[20000, 40000],
       frac_training=0.8,
       eval_interval=250,
+      init_checkpoint_dir='',
       noise_probability=0.0,
       noise_amplitude=0.0,
       noise_type='white',
