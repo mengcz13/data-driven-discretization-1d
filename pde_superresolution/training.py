@@ -162,6 +162,8 @@ def create_hparams(equation: str, **kwargs: Any) -> tf.contrib.training.HParams:
       space_derivatives_weight=0.0,
       time_derivative_weight=1.0,
       integrated_solution_weight=0.0,
+      # tdm_learning_rate: only enabled if >0
+      tdm_learning_rate=-1.0
   )
   hparams.override_from_dict(kwargs)
   return hparams
@@ -211,13 +213,39 @@ def create_training_step(
   else:
     (learning_rate,) = hparams.learning_rates
 
-  optimizer = tf.train.AdamOptimizer(learning_rate, beta2=0.99)
+  print('-----------------------------------TF trainable variables', tf.trainable_variables())
 
-  update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
-  with tf.control_dependencies(update_ops):
-    train_step = optimizer.minimize(loss, global_step=global_step)
+  if hparams.tdm_learning_rate > 0:
+    all_vars = tf.trainable_variables()
+    sdm_vars = [v for v in all_vars if v.name.startswith('predict_coefficients/')]
+    tdm_vars = [v for v in all_vars if v.name.startswith('learnable_tdm/')]
+    # # opt1 = tf.train.AdamOptimizer(learning_rate, beta2=0.99) # no optimization for sdm!
+    # opt2 = tf.train.AdamOptimizer(hparams.tdm_learning_rate, beta2=0.99)
+    # grads = tf.gradients(loss, sdm_vars + tdm_vars)
+    # # grads1 = grads[:len(sdm_vars)]
+    # grads2 = grads[len(tdm_vars):]
 
-  return train_step
+    # update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+    # with tf.control_dependencies(update_ops):
+    #   # train_op1 = opt1.apply_gradients(zip(grads1, sdm_vars), global_step=global_step)
+    #   train_op2 = opt2.apply_gradients(zip(grads2, tdm_vars), global_step=global_step)
+    #   # train_op = tf.group(train_op1, train_op2)
+    # return train_op2
+
+    optimizer = tf.train.AdamOptimizer(hparams.tdm_learning_rate, beta2=0.99)
+    update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+    with tf.control_dependencies(update_ops):
+      train_step = optimizer.minimize(loss, global_step=global_step, var_list=tdm_vars)
+    return train_step
+
+  else:
+    optimizer = tf.train.AdamOptimizer(learning_rate, beta2=0.99)
+
+    update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+    with tf.control_dependencies(update_ops):
+      train_step = optimizer.minimize(loss, global_step=global_step)
+
+    return train_step
 
 
 def setup_training(

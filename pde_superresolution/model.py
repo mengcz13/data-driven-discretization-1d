@@ -19,6 +19,7 @@ from __future__ import division
 from __future__ import print_function
 
 import numbers
+import logging
 
 import enum
 import numpy as np
@@ -133,6 +134,65 @@ def apply_space_derivatives(
       k: derivatives[..., i] for i, k in enumerate(equation.DERIVATIVE_NAMES)
   }
   return equation.equation_of_motion(inputs, derivatives_dict)
+
+
+def apply_space_derivatives_nn(
+    derivatives: tf.Tensor,
+    inputs: tf.Tensor,
+    equation: equations.Equation) -> tf.Tensor:
+  """Combine spatial derivatives with input to calculate time derivatives. Use spatial derivatives and inputs with a neural network.
+
+  Args:
+    derivatives: float32 tensor with dimensions [batch, x, derivative] giving
+      unnormalized spatial derivatives, e.g., as output from
+      predict_derivatives() or center_finite_differences().
+    inputs: float32 tensor with dimensions [batch, x].
+    equation: equation being solved.
+
+  Returns:
+    Float32 Tensor with diensions [batch, x] giving the time derivatives for
+    the given inputs and derivative model.
+  """
+  derivatives_dict = {
+      k: derivatives[..., i] for i, k in enumerate(equation.DERIVATIVE_NAMES)
+  }
+  y = inputs
+  spatial_derivatives = derivatives_dict
+  with tf.variable_scope('learnable_tdm', reuse=tf.AUTO_REUSE):
+    if type(equation) is equations.BurgersEquation:
+      y_x = spatial_derivatives['u_x']
+      y_xx = spatial_derivatives['u_xx']
+      # y_t = self.eta * y_xx - self.mu * y * y_x
+      y_t_input = tf.stack([y_xx, y * y_x], axis=-1)
+      # y_t_input = tf.Print(y_t_input, [tf.shape(y_x), tf.shape(y_xx), tf.shape(y_t_input)], message='shapes of y_x, y_xx, y_t_input')
+      y_t = tf.squeeze(tf.layers.dense(y_t_input, units=1, activation=None, use_bias=False), axis=-1)
+      return y_t
+    elif type(equation) is equations.ConservativeBurgersEquation:
+      logging.info('Using learnable TDM!!!!!')
+      del y
+      y = spatial_derivatives['u']
+      y_x = spatial_derivatives['u_x']
+      # flux = self.mu * 0.5 * y ** 2 - self.eta * y_x
+      flux_input = tf.stack([0.5 * y ** 2, y_x], axis=-1)
+      # flux_input = tf.Print(flux_input, [tf.shape(y), tf.shape(y_x), tf.shape(flux_input)], message='shapes of y, y_x, flux_input')
+      flux = tf.squeeze(tf.layers.dense(flux_input, units=1, activation=None, use_bias=False), axis=-1)
+      y_t = -equations.staggered_first_derivative(flux, equation.grid.solution_dx)
+      return y_t
+    elif type(equation) is equations.GodunovBurgersEquation:
+      del y  # unused
+      y_minus = spatial_derivatives['u_minus']
+      y_plus = spatial_derivatives['u_plus']
+      y_x = spatial_derivatives['u_x']
+
+      convective_flux = godunov_convective_flux(y_minus, y_plus)
+      # flux = self.mu * convective_flux - self.eta * y_x
+      flux_input = tf.stack([convective_flux, y_x], axis=-1)
+      # flux_input = tf.Print(flux_input, [tf.shape(y_minus), tf.shape(y_plus), tf.shape(y_x)], message='shapes of y_minus, y_plus, y_x')
+      flux = tf.squeeze(tf.layers.dense(flux_input, units=1, activation=None, use_bias=False), axis=-1)
+      y_t = -equations.staggered_first_derivative(flux, equation.grid.solution_dx)
+      return y_t
+    else:
+      raise NotImplementedError()
 
 
 def integrate_ode(func: Callable[[tf.Tensor, float], tf.Tensor],
@@ -590,7 +650,7 @@ def predict_space_derivatives(
   Returns:
     Float32 Tensor with dimensions [batch, x, derivative].
   """
-  if hparams.model_target == 'coefficients':
+  if hparams.model_target in ['coefficients', 'time_derivative_nn']:
     coefficients = predict_coefficients(inputs, hparams, reuse=reuse)
     return apply_coefficients(coefficients, inputs)
   elif hparams.model_target == 'space_derivatives':
@@ -682,6 +742,11 @@ def predict_result(inputs: tf.Tensor,
     space_derivatives = tf.zeros(
         tf.concat([tf.shape(inputs), [num_derivatives]], axis=0))
     time_derivative = predict_time_derivative(inputs, hparams)
+  elif hparams.model_target == 'time_derivative_nn':
+    space_derivatives = predict_space_derivatives(inputs, hparams)
+    _, equation = equations.from_hparams(hparams)
+    time_derivative = apply_space_derivatives_nn(
+        space_derivatives, inputs, equation)
   else:
     space_derivatives = predict_space_derivatives(inputs, hparams)
     _, equation = equations.from_hparams(hparams)
