@@ -162,20 +162,22 @@ def apply_space_derivatives_nn(
     if type(equation) is equations.BurgersEquation:
       y_x = spatial_derivatives['u_x']
       y_xx = spatial_derivatives['u_xx']
-      # y_t = self.eta * y_xx - self.mu * y * y_x
-      y_t_input = tf.stack([y_xx, y * y_x], axis=-1)
-      # y_t_input = tf.Print(y_t_input, [tf.shape(y_x), tf.shape(y_xx), tf.shape(y_t_input)], message='shapes of y_x, y_xx, y_t_input')
-      y_t = tf.squeeze(tf.layers.dense(y_t_input, units=1, activation=None, use_bias=False), axis=-1)
+      # y_t_input = tf.stack([y_xx, y * y_x], axis=-1)
+      # y_t = tf.squeeze(tf.layers.dense(y_t_input, units=1, activation=None, use_bias=False), axis=-1)
+      y_t_input = tf.stack([y, y_x, y_xx], axis=-1)
+      y_t = tf.layers.dense(y_t_input, units=32, activation=tf.nn.relu)
+      y_t = tf.squeeze(tf.layers.dense(y_t, units=1, activation=None), axis=-1)
       return y_t
     elif type(equation) is equations.ConservativeBurgersEquation:
       logging.info('Using learnable TDM!!!!!')
       del y
       y = spatial_derivatives['u']
       y_x = spatial_derivatives['u_x']
-      # flux = self.mu * 0.5 * y ** 2 - self.eta * y_x
-      flux_input = tf.stack([0.5 * y ** 2, y_x], axis=-1)
-      # flux_input = tf.Print(flux_input, [tf.shape(y), tf.shape(y_x), tf.shape(flux_input)], message='shapes of y, y_x, flux_input')
-      flux = tf.squeeze(tf.layers.dense(flux_input, units=1, activation=None, use_bias=False), axis=-1)
+      # flux_input = tf.stack([0.5 * y ** 2, y_x], axis=-1)
+      # flux = tf.squeeze(tf.layers.dense(flux_input, units=1, activation=None, use_bias=False), axis=-1)
+      flux_input = tf.stack([y, y_x], axis=-1)
+      flux = tf.layers.dense(flux_input, units=32, activation=tf.nn.relu)
+      flux = tf.squeeze(tf.layers.dense(flux, units=1, activation=None), axis=-1)
       y_t = -equations.staggered_first_derivative(flux, equation.grid.solution_dx)
       return y_t
     elif type(equation) is equations.GodunovBurgersEquation:
@@ -185,10 +187,11 @@ def apply_space_derivatives_nn(
       y_x = spatial_derivatives['u_x']
 
       convective_flux = godunov_convective_flux(y_minus, y_plus)
-      # flux = self.mu * convective_flux - self.eta * y_x
+      # flux_input = tf.stack([convective_flux, y_x], axis=-1)
+      # flux = tf.squeeze(tf.layers.dense(flux_input, units=1, activation=None, use_bias=False), axis=-1)
       flux_input = tf.stack([convective_flux, y_x], axis=-1)
-      # flux_input = tf.Print(flux_input, [tf.shape(y_minus), tf.shape(y_plus), tf.shape(y_x)], message='shapes of y_minus, y_plus, y_x')
-      flux = tf.squeeze(tf.layers.dense(flux_input, units=1, activation=None, use_bias=False), axis=-1)
+      flux = tf.layers.dense(flux_input, units=32, activation=tf.nn.relu)
+      flux = tf.squeeze(tf.layers.dense(flux, units=1, activation=None), axis=-1)
       y_t = -equations.staggered_first_derivative(flux, equation.grid.solution_dx)
       return y_t
     else:
