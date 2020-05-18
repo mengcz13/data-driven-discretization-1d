@@ -139,7 +139,8 @@ def apply_space_derivatives(
 def apply_space_derivatives_nn(
     derivatives: tf.Tensor,
     inputs: tf.Tensor,
-    equation: equations.Equation) -> tf.Tensor:
+    equation: equations.Equation,
+    nntype: str = 'linear') -> tf.Tensor:
   """Combine spatial derivatives with input to calculate time derivatives. Use spatial derivatives and inputs with a neural network.
 
   Args:
@@ -162,22 +163,30 @@ def apply_space_derivatives_nn(
     if type(equation) is equations.BurgersEquation:
       y_x = spatial_derivatives['u_x']
       y_xx = spatial_derivatives['u_xx']
-      # y_t_input = tf.stack([y_xx, y * y_x], axis=-1)
-      # y_t = tf.squeeze(tf.layers.dense(y_t_input, units=1, activation=None, use_bias=False), axis=-1)
-      y_t_input = tf.stack([y, y_x, y_xx], axis=-1)
-      y_t = tf.layers.dense(y_t_input, units=32, activation=tf.nn.relu)
-      y_t = tf.squeeze(tf.layers.dense(y_t, units=1, activation=None), axis=-1)
+      if nntype == 'linear':
+        y_t_input = tf.stack([y_xx, y * y_x], axis=-1)
+        y_t = tf.squeeze(tf.layers.dense(y_t_input, units=1, activation=None, use_bias=False), axis=-1)
+      elif nntype == 'mlp':
+        y_t_input = tf.stack([y, y_x, y_xx], axis=-1)
+        y_t = tf.layers.dense(y_t_input, units=32, activation=tf.nn.relu)
+        y_t = tf.squeeze(tf.layers.dense(y_t, units=1, activation=None), axis=-1)
+      else:
+        raise NotImplementedError()
       return y_t
     elif type(equation) is equations.ConservativeBurgersEquation:
       logging.info('Using learnable TDM!!!!!')
       del y
       y = spatial_derivatives['u']
       y_x = spatial_derivatives['u_x']
-      # flux_input = tf.stack([0.5 * y ** 2, y_x], axis=-1)
-      # flux = tf.squeeze(tf.layers.dense(flux_input, units=1, activation=None, use_bias=False), axis=-1)
-      flux_input = tf.stack([y, y_x], axis=-1)
-      flux = tf.layers.dense(flux_input, units=32, activation=tf.nn.relu)
-      flux = tf.squeeze(tf.layers.dense(flux, units=1, activation=None), axis=-1)
+      if nntype == 'linear':
+        flux_input = tf.stack([0.5 * y ** 2, y_x], axis=-1)
+        flux = tf.squeeze(tf.layers.dense(flux_input, units=1, activation=None, use_bias=False), axis=-1)
+      elif nntype == 'mlp':
+        flux_input = tf.stack([y, y_x], axis=-1)
+        flux = tf.layers.dense(flux_input, units=32, activation=tf.nn.relu)
+        flux = tf.squeeze(tf.layers.dense(flux, units=1, activation=None), axis=-1)
+      else:
+        raise NotImplementedError()
       y_t = -equations.staggered_first_derivative(flux, equation.grid.solution_dx)
       return y_t
     elif type(equation) is equations.GodunovBurgersEquation:
@@ -187,11 +196,15 @@ def apply_space_derivatives_nn(
       y_x = spatial_derivatives['u_x']
 
       convective_flux = godunov_convective_flux(y_minus, y_plus)
-      # flux_input = tf.stack([convective_flux, y_x], axis=-1)
-      # flux = tf.squeeze(tf.layers.dense(flux_input, units=1, activation=None, use_bias=False), axis=-1)
-      flux_input = tf.stack([convective_flux, y_x], axis=-1)
-      flux = tf.layers.dense(flux_input, units=32, activation=tf.nn.relu)
-      flux = tf.squeeze(tf.layers.dense(flux, units=1, activation=None), axis=-1)
+      if nntype == 'linear':
+        flux_input = tf.stack([convective_flux, y_x], axis=-1)
+        flux = tf.squeeze(tf.layers.dense(flux_input, units=1, activation=None, use_bias=False), axis=-1)
+      elif nntype == 'mlp':
+        flux_input = tf.stack([convective_flux, y_x], axis=-1)
+        flux = tf.layers.dense(flux_input, units=32, activation=tf.nn.relu)
+        flux = tf.squeeze(tf.layers.dense(flux, units=1, activation=None), axis=-1)
+      else:
+        raise NotImplementedError()
       y_t = -equations.staggered_first_derivative(flux, equation.grid.solution_dx)
       return y_t
     else:
@@ -653,7 +666,7 @@ def predict_space_derivatives(
   Returns:
     Float32 Tensor with dimensions [batch, x, derivative].
   """
-  if hparams.model_target in ['coefficients', 'time_derivative_nn']:
+  if (hparams.model_target  == 'coefficients') or (hparams.model_target.startswith('time_derivative_nn')):
     coefficients = predict_coefficients(inputs, hparams, reuse=reuse)
     return apply_coefficients(coefficients, inputs)
   elif hparams.model_target == 'space_derivatives':
@@ -745,11 +758,17 @@ def predict_result(inputs: tf.Tensor,
     space_derivatives = tf.zeros(
         tf.concat([tf.shape(inputs), [num_derivatives]], axis=0))
     time_derivative = predict_time_derivative(inputs, hparams)
-  elif hparams.model_target == 'time_derivative_nn':
+  elif hparams.model_target.startswith('time_derivative_nn'):
     space_derivatives = predict_space_derivatives(inputs, hparams)
     _, equation = equations.from_hparams(hparams)
-    time_derivative = apply_space_derivatives_nn(
-        space_derivatives, inputs, equation)
+    if hparams.model_target == 'time_derivative_nn_linear':
+      time_derivative = apply_space_derivatives_nn(
+          space_derivatives, inputs, equation, nntype='linear')
+    elif hparams.model_target == 'time_derivative_nn_mlp':
+      time_derivative = apply_space_derivatives_nn(
+          space_derivatives, inputs, equation, nntype='mlp')
+    else:
+      raise NotImplementedError()
   else:
     space_derivatives = predict_space_derivatives(inputs, hparams)
     _, equation = equations.from_hparams(hparams)

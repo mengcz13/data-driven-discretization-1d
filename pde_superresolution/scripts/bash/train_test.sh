@@ -54,14 +54,14 @@ python pde_superresolution/scripts/run_training.py \
 python pde_superresolution/scripts/run_training.py \
 --checkpoint_dir checkpoints/synthetic/burgers/rs16/scratch_lineartdm \
 --equation burgers \
---hparams "resample_factor=16,learning_rates=[1e-3,1e-4],learning_stops=[20000,40000],model_target=time_derivative_nn" \
+--hparams "resample_factor=16,learning_rates=[1e-3,1e-4],learning_stops=[20000,40000],model_target=time_derivative_nn_linear" \
 --input_path data/piml/burgers_meta-test_train.h5
 
 # meta-train (with spatial & temporal derivative losses)
 python pde_superresolution/scripts/run_training.py \
 --checkpoint_dir checkpoints/synthetic/burgers/rs16/meta-train_diff-coef_lineartdm \
 --equation burgers \
---hparams "resample_factor=16,learning_rates=[1e-3,1e-4],learning_stops=[20000,40000],space_derivatives_weight=1.0,model_target=time_derivative_nn" \
+--hparams "resample_factor=16,learning_rates=[1e-3,1e-4],learning_stops=[20000,40000],space_derivatives_weight=1.0,model_target=time_derivative_nn_linear" \
 --input_path data/piml/burgers_meta-train_diff-coef.h5
 
 # meta-test (train TDM only)
@@ -69,7 +69,7 @@ cp -r checkpoints/synthetic/burgers/rs16/meta-train_diff-coef_lineartdm checkpoi
 python pde_superresolution/scripts/run_training.py \
 --checkpoint_dir checkpoints/synthetic/burgers/rs16/meta-test_diff-coef_lineartdm \
 --equation burgers \
---hparams "resample_factor=16,learning_rates=[1e-3,1e-4],tdm_learning_rate=1e-3,learning_stops=[40000,80000],model_target=time_derivative_nn" \
+--hparams "resample_factor=16,learning_rates=[1e-3,1e-4],tdm_learning_rate=1e-3,learning_stops=[40000,80000],model_target=time_derivative_nn_linear" \
 --input_path data/piml/burgers_meta-test_train.h5
 
 # meta-test (train both)
@@ -77,7 +77,7 @@ cp -r checkpoints/synthetic/burgers/rs16/meta-train_diff-coef_lineartdm checkpoi
 python pde_superresolution/scripts/run_training.py \
 --checkpoint_dir checkpoints/synthetic/burgers/rs16/meta-test_diff-coef_lineartdm_sdm \
 --equation burgers \
---hparams "resample_factor=16,learning_rates=[1e-3,1e-4],learning_stops=[40000,80000],model_target=time_derivative_nn" \
+--hparams "resample_factor=16,learning_rates=[1e-3,1e-4],learning_stops=[40000,80000],model_target=time_derivative_nn_linear" \
 --input_path data/piml/burgers_meta-test_train.h5
 
 
@@ -88,14 +88,14 @@ python pde_superresolution/scripts/run_training.py \
 python pde_superresolution/scripts/run_training.py \
 --checkpoint_dir checkpoints/synthetic/burgers/rs16/scratch_mlptdm \
 --equation burgers \
---hparams "resample_factor=16,learning_rates=[1e-3,1e-4],learning_stops=[20000,40000],model_target=time_derivative_nn" \
+--hparams "resample_factor=16,learning_rates=[1e-3,1e-4],learning_stops=[20000,40000],model_target=time_derivative_nn_mlp" \
 --input_path data/piml/burgers_meta-test_train.h5
 
 # meta-train (with spatial & temporal derivative losses)
 python pde_superresolution/scripts/run_training.py \
 --checkpoint_dir checkpoints/synthetic/burgers/rs16/meta-train_diff-coef_mlptdm \
 --equation burgers \
---hparams "resample_factor=16,learning_rates=[1e-3,1e-4],learning_stops=[20000,40000],space_derivatives_weight=1.0,model_target=time_derivative_nn" \
+--hparams "resample_factor=16,learning_rates=[1e-3,1e-4],learning_stops=[20000,40000],space_derivatives_weight=1.0,model_target=time_derivative_nn_mlp" \
 --input_path data/piml/burgers_meta-train_diff-coef.h5
 
 # meta-test (train TDM only)
@@ -103,7 +103,7 @@ cp -r checkpoints/synthetic/burgers/rs16/meta-train_diff-coef_mlptdm checkpoints
 python pde_superresolution/scripts/run_training.py \
 --checkpoint_dir checkpoints/synthetic/burgers/rs16/meta-test_diff-coef_mlptdm \
 --equation burgers \
---hparams "resample_factor=16,learning_rates=[1e-3,1e-4],tdm_learning_rate=1e-3,learning_stops=[40000,80000],model_target=time_derivative_nn" \
+--hparams "resample_factor=16,learning_rates=[1e-3,1e-4],tdm_learning_rate=1e-3,learning_stops=[40000,80000],model_target=time_derivative_nn_mlp" \
 --input_path data/piml/burgers_meta-test_train.h5
 
 # meta-test (train both)
@@ -111,5 +111,5 @@ cp -r checkpoints/synthetic/burgers/rs16/meta-train_diff-coef_mlptdm checkpoints
 python pde_superresolution/scripts/run_training.py \
 --checkpoint_dir checkpoints/synthetic/burgers/rs16/meta-test_diff-coef_mlptdm_sdm \
 --equation burgers \
---hparams "resample_factor=16,learning_rates=[1e-3,1e-4],learning_stops=[40000,80000],model_target=time_derivative_nn" \
+--hparams "resample_factor=16,learning_rates=[1e-3,1e-4],learning_stops=[40000,80000],model_target=time_derivative_nn_mlp" \
 --input_path data/piml/burgers_meta-test_train.h5
