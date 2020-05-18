@@ -332,6 +332,7 @@ def baseline_result(inputs: tf.Tensor,
     Float32 Tensor with dimensions [batch, x, channel] with inferred space
     derivatives, time derivative and the integrated solution.
   """
+  print(type(equation), accuracy_order)
   if accuracy_order is None:
     equation = equation.to_exact()
   elif type(equation) in equations.FLUX_EQUATION_TYPES:
@@ -392,7 +393,8 @@ def model_inputs(fine_inputs: tf.Tensor,
   resample_method = 'mean' if coarse_equation.CONSERVATIVE else 'subsample'
   resample = duckarray.RESAMPLE_FUNCS[resample_method]
 
-  if evaluation:
+  # if evaluation:
+  if False:
     ground_truth_order = None
   else:
     if hparams.ground_truth_order == -1:
@@ -655,7 +657,8 @@ def predict_space_derivatives_directly(inputs, hparams, reuse=tf.AUTO_REUSE):
 def predict_space_derivatives(
     inputs: tf.Tensor,
     hparams: tf.contrib.training.HParams,
-    reuse: object = tf.AUTO_REUSE) -> tf.Tensor:
+    reuse: object = tf.AUTO_REUSE,
+    highres_sd: tf.Tensor = None) -> tf.Tensor:
   """Infer normalized derivatives from inputs with our forward model.
 
   Args:
@@ -666,9 +669,16 @@ def predict_space_derivatives(
   Returns:
     Float32 Tensor with dimensions [batch, x, derivative].
   """
-  if (hparams.model_target  == 'coefficients') or (hparams.model_target.startswith('time_derivative_nn')):
-    coefficients = predict_coefficients(inputs, hparams, reuse=reuse)
-    return apply_coefficients(coefficients, inputs)
+  if hparams.model_target  == 'coefficients':
+    if hparams.sd_source == 'prediction':
+      coefficients = predict_coefficients(inputs, hparams, reuse=reuse)
+      return apply_coefficients(coefficients, inputs)
+    elif hparams.sd_source == 'highres':
+      if highres_sd is None:
+        raise NotImplementedError('Must provide high-resolution spatial derivatives when hparams.sd_source == \"highres\"!')
+      return highres_sd
+    else:
+      raise NotImplementedError()
   elif hparams.model_target == 'space_derivatives':
     return predict_space_derivatives_directly(inputs, hparams, reuse=reuse)
   else:
@@ -694,7 +704,9 @@ def predict_flux_directly(inputs, hparams, reuse=tf.AUTO_REUSE):
 def predict_time_derivative(
     inputs: tf.Tensor,
     hparams: tf.contrib.training.HParams,
-    reuse: object = tf.AUTO_REUSE) -> tf.Tensor:
+    reuse: object = tf.AUTO_REUSE,
+    given_space_derivatives = None,
+    highres_sd: tf.Tensor = None) -> tf.Tensor:
   """Infer time evolution from inputs with our forward model.
 
   Args:
@@ -710,10 +722,18 @@ def predict_time_derivative(
   elif hparams.model_target == 'flux':
     return predict_flux_directly(inputs, hparams, reuse=reuse)
   else:
-    space_derivatives = predict_space_derivatives(
-        inputs, hparams, reuse=reuse)
+    if given_space_derivatives is None:
+      space_derivatives = predict_space_derivatives(
+          inputs, hparams, reuse=reuse, highres_sd=highres_sd)
+    else:
+      space_derivatives = given_space_derivatives
     _, equation = equations.from_hparams(hparams)
-    return apply_space_derivatives(space_derivatives, inputs, equation)
+    if hparams.tdm_type == 'equation':
+      return apply_space_derivatives(space_derivatives, inputs, equation)
+    elif hparams.tdm_type == 'linear':
+      return apply_space_derivatives_nn(space_derivatives, inputs, equation, 'linear')
+    elif hparams.tdm_type == 'mlp':
+      return apply_space_derivatives_nn(space_derivatives, inputs, equation, 'mlp')
 
 
 def predict_time_evolution(inputs: tf.Tensor,
@@ -738,7 +758,8 @@ def predict_time_evolution(inputs: tf.Tensor,
 
 
 def predict_result(inputs: tf.Tensor,
-                   hparams: tf.contrib.training.HParams) -> tf.Tensor:
+                   hparams: tf.contrib.training.HParams,
+                   highres_sd: tf.Tensor = None) -> tf.Tensor:
   """Infer predictions from inputs with our forward model.
 
   Args:
@@ -758,22 +779,10 @@ def predict_result(inputs: tf.Tensor,
     space_derivatives = tf.zeros(
         tf.concat([tf.shape(inputs), [num_derivatives]], axis=0))
     time_derivative = predict_time_derivative(inputs, hparams)
-  elif hparams.model_target.startswith('time_derivative_nn'):
-    space_derivatives = predict_space_derivatives(inputs, hparams)
-    _, equation = equations.from_hparams(hparams)
-    if hparams.model_target == 'time_derivative_nn_linear':
-      time_derivative = apply_space_derivatives_nn(
-          space_derivatives, inputs, equation, nntype='linear')
-    elif hparams.model_target == 'time_derivative_nn_mlp':
-      time_derivative = apply_space_derivatives_nn(
-          space_derivatives, inputs, equation, nntype='mlp')
-    else:
-      raise NotImplementedError()
   else:
-    space_derivatives = predict_space_derivatives(inputs, hparams)
+    space_derivatives = predict_space_derivatives(inputs, hparams, highres_sd=highres_sd)
     _, equation = equations.from_hparams(hparams)
-    time_derivative = apply_space_derivatives(
-        space_derivatives, inputs, equation)
+    time_derivative = predict_time_derivative(inputs, hparams, given_space_derivatives=space_derivatives, highres_sd=highres_sd)
 
   if hparams.num_time_steps:
     integrated_solution = predict_time_evolution(inputs, hparams)

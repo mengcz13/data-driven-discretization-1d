@@ -163,7 +163,9 @@ def create_hparams(equation: str, **kwargs: Any) -> tf.contrib.training.HParams:
       time_derivative_weight=1.0,
       integrated_solution_weight=0.0,
       # tdm_learning_rate: only enabled if >0
-      tdm_learning_rate=-1.0
+      tdm_learning_rate=-1.0,
+      tdm_type='equation',
+      sd_source='prediction'
   )
   hparams.override_from_dict(kwargs)
   return hparams
@@ -265,7 +267,9 @@ def setup_training(
                                dataset_type=model.Dataset.TRAINING)
   tensors = dataset.make_one_shot_iterator().get_next()
 
-  predictions = model.predict_result(tensors['inputs'], hparams)
+  for k in tensors:
+    print('setup_training', k, tensors[k].shape)
+  predictions = model.predict_result(tensors['inputs'], hparams, highres_sd=tensors['labels'][..., :-1])
 
   loss_per_head = model.loss_per_head(predictions,
                                       labels=tensors['labels'],
@@ -306,7 +310,10 @@ class Inferer(object):
 
     _, coarse_equation = equations.from_hparams(hparams)
 
-    predictions = model.predict_result(data['inputs'], hparams)
+    for k in data:
+      print('Inferer', k, data[k].shape)
+
+    predictions = model.predict_result(data['inputs'], hparams, highres_sd=data['labels'][..., :-1])
     loss_per_head = model.loss_per_head(
         predictions,
         labels=data['labels'],
